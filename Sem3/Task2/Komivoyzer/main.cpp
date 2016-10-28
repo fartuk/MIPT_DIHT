@@ -67,7 +67,7 @@ public:
     int length_;
 };
 
-// Компаратор для сортировки Рёбер.
+// Компаратор для сортировки рёбер.
 class Compare {
 public:
     bool operator()(Edge a, Edge b) {
@@ -75,10 +75,9 @@ public:
     }
 };
 
-
+// Случайное число из диапазона.
 double Random(double min, double max)
 {
-
     return (double)(rand())/RAND_MAX*(max - min) + min;
 }
 
@@ -92,27 +91,65 @@ pair<float, float> MakeVert(int i){
     return pair<float, float>(rand_x, rand_y);
 };
 
+// Метрика - евклидова.
 float Metric(pair<float, float> a, pair<float, float> b){
     return sqrt((a.first - b.first) * (a.first - b.first) + (a.second - b.second) * (a.second - b.second));
 }
 
+// Хэш для пар.
 struct Hash {
     template <class T1, class T2>
     std::size_t operator () (const std::pair<T1,T2> &p) const {
         auto h1 = std::hash<T1>{}(p.first);
         auto h2 = std::hash<T2>{}(p.second);
-
-        // Mainly for demonstration purposes, i.e. works but is overly simple
-        // In the real world, use sth. like boost.hash_combine
         return h1 ^ h2;
     }
 };
 
+// Класс для точного решения.
+class Presize {
+public:
+    // Текущий минимум расстояния.
+    float min_;
+    Presize() {
+        min_ = 20000000;
+    }
+    // Рекурсивная процедура поиска кратчайшего расстояния.
+    void RecurKomiv(int n, int start, vector<char> &visited, vector<pair<float, float> > &verticles, float sum) {
+        // Подсчет числа посещенных для проверки выхода из рекурсии.
+        int count_visited = 0;
+        for (int i = 0; i < n; ++i) {
+            if (visited[i]) {
+                count_visited++;
+            }
+        }
+        // Если есть еще не посещенные.
+        if (count_visited != n) {
+            // Перебираем все вершины.
+            for (int i = 0; i < n; ++i) {
+                if (visited[i] == 0) {
+                    vector<char> tmp(visited);
+                    tmp[i] = 1;
+                    float tmp_sum = sum + Metric(verticles[i], verticles[start]);
+                    RecurKomiv(n, i, tmp, verticles, tmp_sum);
+                }
+            }
+        } else {
+            if (min_ > sum) {
+                min_ = sum;
+            }
+        }
+    }
+};
 int main() {
     srand(time(0));
-    vector<float> distances;
-    for (int t = 0; t < 10; ++t) {
-        int vert_count = 5;
+    // Среднеквадратичная ошибка.
+    int sum_dev = 0;
+    // Число вершин.
+    float vert_count = 10;
+    // Число независмых запусков эксперимента.
+    int exper_count = 10;
+    for (int t = 0; t < exper_count; ++t) {
         int edge_count = vert_count * (vert_count - 1) / 2;
         // Вектор, в котором хранятся ребра.
         vector<Edge> edges;
@@ -124,6 +161,7 @@ int main() {
         for (int i = 0; i < vert_count; ++i) {
             pair<float, float> tmp_vert = MakeVert(i);
             verticles.push_back(pair<float, float>(tmp_vert));
+            // Номера вершин начинается с 1.
             number.insert(pair< pair<float, float>, int >(tmp_vert, i + 1));
         }
 
@@ -137,6 +175,7 @@ int main() {
         Compare comparator;
         std::sort(edges.begin(), edges.end(), comparator);
         DSU dsu(vert_count);
+        // Вектор остаточного дерева.
         vector<Edge> span_tree;
         int sum = 0;
         // Проходим по отсортированному вектору рёбер
@@ -203,7 +242,15 @@ int main() {
             dist += Metric(verticles[*it - 1], verticles[*tmp_it - 1]);
         }
         dist += Metric(verticles[*result.begin()], verticles[*(result.end()--)]);
-        distances.push_back(dist);
+
+        // Точное решение.
+        vector<char> visited(vert_count, 0);
+        Presize pr;
+        pr.RecurKomiv(vert_count, 0, visited, verticles, 0);
+        cout << pr.min_ << ' ' << dist << '\n' ;
+        sum_dev += (dist - pr.min_) * (dist - pr.min_);
     }
+    cout << sqrt(sum_dev / exper_count);
+
     return 0;
 }
